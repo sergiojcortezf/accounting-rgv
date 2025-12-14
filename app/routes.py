@@ -218,7 +218,20 @@ def cancel_payment(payment_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# --- RUTA DE PRUEBA (HOME) ---
+# --- VISTAS FRONTEND (HTML) ---
+
 @main_bp.route('/')
 def index():
-    return "<h1>El sistema Accounting RGV está funcionando 🚀</h1>"
+    return render_template('index.html')
+
+@main_bp.route('/accounts')
+def view_accounts():
+    # Obtenemos todas las cuentas para pasarlas a la plantilla
+    accounts = Account.query.all()
+    return render_template('accounts.html', accounts=accounts)
+
+@main_bp.route('/expenses')
+def view_expenses():
+    # Obtenemos gastos ordenados recientes primero
+    expenses = Expense.query.order_by(Expense.date_incurred.desc()).all()
+    return render_template('expenses.html', expenses=expenses, now_date=datetime.now().strftime('%Y-%m-%d'))

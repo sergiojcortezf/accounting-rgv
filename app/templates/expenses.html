@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="fas fa-file-invoice-dollar"></i> Control de Gastos</h2>
+        <p class="text-muted">Ciclo de vida: Borrador -> Aprobación -> Pago.</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newExpenseModal">
+        <i class="fas fa-plus-circle"></i> Registrar Gasto
+    </button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Descripción</th>
+                        <th>Categoría</th>
+                        <th>Monto</th>
+                        <th>Estado Gasto</th>
+                        <th>Estado Pago</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="expensesTableBody">
+                    {% for expense in expenses %}
+                    <tr>
+                        <td>{{ expense.date_incurred.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ expense.description }}</td>
+                        <td><span class="badge bg-secondary">{{ expense.category }}</span></td>
+                        <td class="fw-bold">${{ "{:,.2f}".format(expense.amount) }}</td>
+                        <td>
+                            {% if expense.status.name == 'DRAFT' %}
+                                <span class="badge bg-secondary">Borrador</span>
+                            {% elif expense.status.name == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">Por Aprobar</span>
+                            {% elif expense.status.name == 'APPROVED' %}
+                                <span class="badge bg-success">Aprobado</span>
+                            {% elif expense.status.name == 'REJECTED' %}
+                                <span class="badge bg-danger">Rechazado</span>
+                            {% elif expense.status.name == 'IN_PAYMENT' %}
+                                <span class="badge bg-info text-dark">En Proceso Pago</span>
+                            {% elif expense.status.name == 'PAID' %}
+                                <span class="badge bg-dark">Pagado <i class="fas fa-check"></i></span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if expense.payment %}
+                                <small>{{ expense.payment.status.value }}</small>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                
+                                {% if expense.status.name == 'DRAFT' %}
+                                <button class="btn btn-outline-primary" onclick="updateStatus({{expense.id}}, 'send')" title="Enviar a Revisión">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                                {% endif %}
+
+                                {% if expense.status.name == 'PENDING' %}
+                                <button class="btn btn-success" onclick="updateStatus({{expense.id}}, 'approve')" title="Aprobar">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-danger" onclick="updateStatus({{expense.id}}, 'reject')" title="Rechazar">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                {% endif %}
+
+                                {% if expense.status.name == 'APPROVED' %}
+                                <button class="btn btn-warning text-dark" onclick="openPaymentModal({{expense.id}}, {{expense.amount}})">
+                                    <i class="fas fa-money-bill-wave"></i> Pagar
+                                </button>
+                                {% endif %}
+                                
+                                 {% if expense.payment and expense.payment.status.name == 'PENDING' %}
+                                <button class="btn btn-success" onclick="confirmPayment({{expense.payment.id}})" title="Confirmar Pago">
+                                    <i class="fas fa-file-signature"></i>
+                                </button>
+                                <button class="btn btn-danger" onclick="cancelPayment({{expense.payment.id}})" title="Cancelar Pago">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                {% endif %}
+
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newExpenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuevo Gasto</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createExpenseForm">
+                    <div class="mb-3">
+                        <label>Descripción</label>
+                        <input type="text" name="description" class="form-control" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label>Monto</label>
+                            <input type="number" name="amount" class="form-control" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label>Fecha</label>
+                            <input type="date" name="date" class="form-control" value="{{ now_date }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label>Categoría</label>
+                        <select name="category" class="form-select">
+                            <option>Oficina</option>
+                            <option>Viáticos</option>
+                            <option>Software</option>
+                            <option>Nómina</option>
+                            <option>Otros</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="submitExpense()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark">Generar Pago</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Estás a punto de pagar: <strong>$<span id="payAmount"></span></strong></p>
+                <input type="hidden" id="payExpenseId">
+                
+                <label class="form-label">Selecciona la Cuenta de Origen:</label>
+                <select id="payAccountSelect" class="form-select mb-3">
+                    </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-dark" onclick="processPayment()">Generar Orden de Pago</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 1. Crear Gasto
+    function submitExpense() {
+        const data = Object.fromEntries(new FormData(document.getElementById('createExpenseForm')).entries());
+        axios.post('/api/expenses', data)
+            .then(() => location.reload())
+            .catch(err => alert(err.response?.data?.error || 'Error'));
+    }
+
+    // 2. Cambiar Estatus (Enviar, Aprobar, Rechazar)
+    function updateStatus(id, action) {
+        if(!confirm('¿Confirmar acción: ' + action + '?')) return;
+        axios.post(`/api/expenses/${id}/action`, { action: action })
+            .then(() => location.reload())
+            .catch(err => alert(err.response.data.error));
+    }
+
+    // 3. Abrir Modal de Pago (Cargar cuentas)
+    function openPaymentModal(expenseId, amount) {
+        document.getElementById('payExpenseId').value = expenseId;
+        document.getElementById('payAmount').innerText = amount;
+        
+        // Cargar cuentas con saldo
+        axios.get('/api/accounts').then(res => {
+            const select = document.getElementById('payAccountSelect');
+            select.innerHTML = '';
+            res.data.forEach(acc => {
+                select.innerHTML += `<option value="${acc.id}">${acc.name} (Saldo: $${acc.balance})</option>`;
+            });
+            new bootstrap.Modal(document.getElementById('paymentModal')).show();
+        });
+    }
+
+    // 4. Procesar Pago (Botón Mágico)
+    function processPayment() {
+        const expenseId = document.getElementById('payExpenseId').value;
+        const accountId = document.getElementById('payAccountSelect').value;
+        
+        axios.post('/api/payments/prepare', { expense_id: expenseId, account_id: accountId })
+            .then(res => {
+                alert(res.data.message);
+                location.reload();
+            })
+            .catch(err => alert(err.response.data.error));
+    }
+    
+    // 5. Confirmar Pago Final
+    function confirmPayment(paymentId) {
+        axios.post(`/api/payments/${paymentId}/confirm`)
+            .then(() => location.reload())
+            .catch(err => alert(err.response.data.error));
+    }
+
+    // 6. Cancelar Pago
+    function cancelPayment(paymentId) {
+        if(!confirm('¿Cancelar pago y liberar gasto?')) return;
+        axios.post(`/api/payments/${paymentId}/cancel`)
+            .then(() => location.reload())
+            .catch(err => alert(err.response.data.error));
+    }
+</script>
+{% endblock %}

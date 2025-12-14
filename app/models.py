@@ -9,6 +9,7 @@ class ExpenseStatus(enum.Enum):
     APPROVED = "Aprobado"            # Listo para generar pago
     REJECTED = "Rechazado"           # Fin del flujo
     IN_PAYMENT = "En Proceso de Pago" # Ya se generó la orden de pago (bloqueado)
+    PAID = "Pagado"                 # Pago completado
 
 class PaymentStatus(enum.Enum):
     PENDING = "Programado"           # Creado automáticamente

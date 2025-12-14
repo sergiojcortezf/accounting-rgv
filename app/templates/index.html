@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 text-center mt-5">
+        <h1 class="display-4">Bienvenido al Sistema Financiero RGV</h1>
+        <p class="lead">Gestión de Gastos, Aprobaciones y Pagos Bancarios.</p>
+        <hr class="my-4">
+        <div class="d-flex justify-content-center gap-3">
+            <a href="/expenses" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus-circle"></i> Registrar Gasto
+            </a>
+            <a href="/accounts" class="btn btn-outline-dark btn-lg">
+                <i class="fas fa-wallet"></i> Ver Cuentas
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
