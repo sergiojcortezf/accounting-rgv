@@ -28,5 +28,8 @@ def create_app():
                 print(">>> Esperando a MySQL...")
                 time.sleep(3)
                 intentos += 1
+        
+        from .routes import main_bp
+        app.register_blueprint(main_bp)
 
     return app
