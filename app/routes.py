@@ -218,6 +218,45 @@ def cancel_payment(payment_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# --- DATOS PARA GRÁFICOS (DASHBOARD) ---
+
+@main_bp.route('/api/dashboard/data')
+def dashboard_data():
+    """
+    Retorna totales para los gráficos:
+    1. Saldo total en bancos.
+    2. Gastos por categoría.
+    3. Gastos por estado.
+    """
+    # 1. Saldo Total
+    total_balance = db.session.query(db.func.sum(Account.balance)).scalar() or 0
+    
+    # 2. Gastos por Categoría (Solo los aprobados o pagados para ser realistas)
+    # Excluimos los 'Rechazados' y 'Borradores' para la estadística financiera
+    category_query = db.session.query(
+        Expense.category, 
+        db.func.sum(Expense.amount)
+    ).filter(Expense.status.in_([ExpenseStatus.APPROVED, ExpenseStatus.PAID, ExpenseStatus.IN_PAYMENT]))\
+     .group_by(Expense.category).all()
+     
+    categories = [r[0] for r in category_query]
+    amounts = [float(r[1]) for r in category_query]
+    
+    # 3. Conteo por Estatus
+    status_query = db.session.query(
+        Expense.status,
+        db.func.count(Expense.id)
+    ).group_by(Expense.status).all()
+    
+    status_labels = [s[0].value for s in status_query]
+    status_counts = [s[1] for s in status_query]
+
+    return jsonify({
+        'total_balance': float(total_balance),
+        'chart_categories': {'labels': categories, 'data': amounts},
+        'chart_status': {'labels': status_labels, 'data': status_counts}
+    })
+
 # --- VISTAS FRONTEND (HTML) ---
 
 @main_bp.route('/')

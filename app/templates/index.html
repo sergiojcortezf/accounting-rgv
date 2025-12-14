@@ -1,19 +1,102 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12 text-center mt-5">
-        <h1 class="display-4">Bienvenido al Sistema Financiero RGV</h1>
-        <p class="lead">Gestión de Gastos, Aprobaciones y Pagos Bancarios.</p>
-        <hr class="my-4">
-        <div class="d-flex justify-content-center gap-3">
-            <a href="/expenses" class="btn btn-primary btn-lg">
-                <i class="fas fa-plus-circle"></i> Registrar Gasto
-            </a>
-            <a href="/accounts" class="btn btn-outline-dark btn-lg">
-                <i class="fas fa-wallet"></i> Ver Cuentas
-            </a>
+<div class="row mb-4 fade-in">
+    <div class="col-12">
+        <h2 class="display-6 mb-3">Resumen Financiero</h2>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card bg-primary text-white h-100 shadow">
+            <div class="card-body text-center d-flex flex-column justify-content-center">
+                <h5 class="card-title text-white-50">Saldo Global en Bancos</h5>
+                <h1 class="display-4 fw-bold" id="totalBalance">Cargando...</h1>
+                <p class="card-text"><i class="fas fa-wallet"></i> Disponible para dispersión</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-white fw-bold">Presupuesto por Categoría</div>
+            <div class="card-body">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-white fw-bold">Estado de Solicitudes</div>
+            <div class="card-body">
+                <canvas id="statusChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
+
+<div class="row text-center mt-4">
+    <div class="col-12">
+        <a href="/expenses" class="btn btn-outline-primary btn-lg mx-2">
+            <i class="fas fa-plus-circle"></i> Gestionar Gastos
+        </a>
+        <a href="/accounts" class="btn btn-outline-dark btn-lg mx-2">
+            <i class="fas fa-university"></i> Ver Cuentas
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Cargar datos del backend
+        axios.get('/api/dashboard/data')
+            .then(function(response) {
+                const data = response.data;
+                
+                // 1. Actualizar KPI Saldo
+                const balanceFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(data.total_balance);
+                document.getElementById('totalBalance').innerText = balanceFmt;
+
+                // 2. Gráfico de Barras (Categorías)
+                new Chart(document.getElementById('categoryChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.chart_categories.labels,
+                        datasets: [{
+                            label: 'Monto (MXN)',
+                            data: data.chart_categories.data,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                });
+
+                // 3. Gráfico de Dona (Estatus)
+                new Chart(document.getElementById('statusChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.chart_status.labels,
+                        datasets: [{
+                            data: data.chart_status.data,
+                            backgroundColor: [
+                                '#6c757d', // Borrador
+                                '#ffc107', // Pendiente
+                                '#198754', // Aprobado
+                                '#dc3545', // Rechazado
+                                '#0dcaf0', // En Pago
+                                '#212529'  // Pagado
+                            ]
+                        }]
+                    }
+                });
+            })
+            .catch(error => console.error(error));
+    });
+</script>
 {% endblock %}
