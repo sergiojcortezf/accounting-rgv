@@ -118,6 +118,106 @@ def change_expense_status(id):
     db.session.commit()
     return jsonify({'message': f'Estado actualizado a: {expense.status.value}'})
 
+# --- API DE PAGOS (PAYMENTS) Y TESORERÍA ---
+
+@main_bp.route('/api/payments/prepare', methods=['POST'])
+def prepare_payment():
+    """
+    PASO 1: BOTÓN "GENERAR PAGO"
+    - Recibe: expense_id, account_id
+    - Verifica: ¿El gasto está aprobado? ¿Hay fondos suficientes?
+    - Acción: Crea el objeto Payment (Pendiente) y bloquea el Gasto (En Proceso).
+    """
+    data = request.get_json()
+    expense_id = data.get('expense_id')
+    account_id = data.get('account_id')
+    
+    expense = Expense.query.get_or_404(expense_id)
+    account = Account.query.get_or_404(account_id)
+    
+    # 1. Validaciones de Negocio
+    if expense.status != ExpenseStatus.APPROVED:
+        return jsonify({'error': 'El gasto no está APROBADO para pago'}), 400
+        
+    if account.balance < expense.amount:
+        return jsonify({'error': 'Fondos Insuficientes en la cuenta seleccionada'}), 400
+        
+    try:
+        # 2. Crear el Pago (Estado: PENDING / Programado)
+        new_payment = Payment(
+            amount=expense.amount,
+            expense_id=expense.id,
+            account_id=account.id,
+            status=PaymentStatus.PENDING,
+            reference_code=f"REF-{datetime.now().strftime('%H%M%S')}" # Generamos una ref temporal
+        )
+        
+        # 3. Bloquear el Gasto para que nadie más lo pague
+        expense.status = ExpenseStatus.IN_PAYMENT
+        
+        db.session.add(new_payment)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Pago programado exitosamente. Requiere confirmación.', 
+            'payment_id': new_payment.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@main_bp.route('/api/payments/<int:payment_id>/confirm', methods=['POST'])
+def confirm_payment(payment_id):
+    """
+    PASO 2: EJECUTAR PAGO (DOBLE PARTIDA)
+    - Acción: Resta el saldo de la cuenta y marca todo como PAGADO.
+    """
+    payment = Payment.query.get_or_404(payment_id)
+    account = Account.query.get(payment.account_id)
+    expense = Expense.query.get(payment.expense_id)
+    
+    if payment.status != PaymentStatus.PENDING:
+        return jsonify({'error': 'El pago no está pendiente'}), 400
+        
+    try:        
+        # 1. Restar dinero (Salida de Banco)
+        account.balance -= payment.amount
+        
+        # 2. Actualizar estados
+        payment.status = PaymentStatus.PAID
+        payment.payment_date = datetime.utcnow()
+        expense.status = ExpenseStatus.PAID
+        
+        db.session.commit()
+        
+        return jsonify({'message': 'Pago ejecutado correctamente. Saldo actualizado.'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error en transacción: {str(e)}'}), 500
+
+@main_bp.route('/api/payments/<int:payment_id>/cancel', methods=['POST'])
+def cancel_payment(payment_id):
+    """
+    FLUJO ALTERNO: CANCELAR OPERACIÓN
+    - Acción: Cancela el pago y LIBERA el gasto (regresa a Aprobado)
+    """
+    payment = Payment.query.get_or_404(payment_id)
+    expense = Expense.query.get(payment.expense_id)
+    
+    if payment.status != PaymentStatus.PENDING:
+        return jsonify({'error': 'Solo se pueden cancelar pagos pendientes'}), 400
+        
+    try:
+        payment.status = PaymentStatus.CANCELLED
+        expense.status = ExpenseStatus.APPROVED 
+        
+        db.session.commit()
+        return jsonify({'message': 'Pago cancelado. Gasto liberado para nuevo intento.'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # --- RUTA DE PRUEBA (HOME) ---
 @main_bp.route('/')
 def index():
