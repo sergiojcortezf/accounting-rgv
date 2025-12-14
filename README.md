@@ -31,7 +31,7 @@
 1.  **Clonar y arrancar:**
 
     ```bash
-    git clone <tu-repo-url>
+    git clone https://github.com/sergiojcortezf/accounting-rgv
     cd accounting-rgv
     docker-compose up --build
     ```
